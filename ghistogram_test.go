@@ -5,62 +5,12 @@ import (
 	"testing"
 )
 
-func TestSearch(t *testing.T) {
-	tests := []struct {
-		arr []uint64
-		val uint64
-		exp int
-	}{
-		{[]uint64(nil), 0, -1},
-		{[]uint64(nil), 100, -1},
-
-		{[]uint64{0}, 0, 0},
-		{[]uint64{0, 10}, 0, 0},
-		{[]uint64{0, 10, 20}, 0, 0},
-
-		{[]uint64{0}, 1, 0},
-		{[]uint64{0, 10}, 1, 0},
-		{[]uint64{0, 10, 20}, 1, 0},
-
-		{[]uint64{0}, 10, 0},
-		{[]uint64{0, 10}, 10, 1},
-		{[]uint64{0, 10, 20}, 10, 1},
-
-		{[]uint64{0}, 15, 0},
-		{[]uint64{0, 10}, 15, 1},
-		{[]uint64{0, 10, 20}, 15, 1},
-
-		{[]uint64{0}, 20, 0},
-		{[]uint64{0, 10}, 20, 1},
-		{[]uint64{0, 10, 20}, 20, 2},
-
-		{[]uint64{0}, 30, 0},
-		{[]uint64{0, 10}, 30, 1},
-		{[]uint64{0, 10, 20}, 30, 2},
-	}
-
-	for testi, test := range tests {
-		got := search(test.arr, test.val)
-		if got != test.exp {
-			t.Errorf("test #%d, arr: %v, val: %d, exp: %d, got: %d",
-				testi, test.arr, test.val, test.exp, got)
-		}
-		if got >= 0 &&
-			got < len(test.arr) &&
-			test.arr[got] > test.val {
-			t.Errorf("test #%d, test.arr[got] > test.val,"+
-				" arr: %v, val: %d, exp: %d, got: %d",
-				testi, test.arr, test.val, test.exp, got)
-		}
-	}
-}
-
 func TestNewHistogram(t *testing.T) {
 	tests := []struct {
 		numBins         int
 		binFirst        uint64
 		binGrowthFactor float64
-		exp             []uint64
+		ent             []uint64
 	}{
 		{2, 123, 10.0, []uint64{0, 123}},
 		{2, 123, 10.0, []uint64{0, 123}},
@@ -75,73 +25,72 @@ func TestNewHistogram(t *testing.T) {
 	}
 
 	for testi, test := range tests {
-		gh := NewHistogram(
-			test.numBins, test.binFirst, test.binGrowthFactor)
-		if len(gh.Ranges) != len(gh.Counts) {
-			t.Errorf("mismatched len's")
+		gh := NewHistogram(test.numBins, test.binFirst, test.binGrowthFactor)
+		for i := 0; i < len(test.ent); i++ {
+			gh.Add(test.ent[i], 1)
 		}
-		if len(gh.Ranges) != test.numBins {
-			t.Errorf("wrong len's")
+
+		if gh._name != "Histogram" {
+			t.Errorf("test #%d: Incorrect name of histogram!", testi)
 		}
-		if len(gh.Ranges) != len(test.exp) {
-			t.Errorf("unequal len's")
+
+		if gh.Total() != uint64(len(test.ent)) {
+			t.Errorf("test #%d: Incorrect total count", testi)
 		}
-		for i := 0; i < len(gh.Ranges); i++ {
-			if gh.Ranges[i] != test.exp[i] {
-				t.Errorf("test #%d, actual (%v) != exp (%v)",
-					testi, gh.Ranges, test.exp)
-			}
+
+		if len(gh._bins) != test.numBins+2 {
+			t.Errorf("test #%d: Incorrect number of bins", testi)
 		}
 	}
 }
 
 func TestAdd(t *testing.T) {
-	// Bins will look like: {0, 10, 20, 40, 80}.
+	// Bins will look like: {0-10, 10-20, 20-40, 40-80, 80-160, 160-320, 320-inf}
 	gh := NewHistogram(5, 10, 2.0)
 
 	tests := []struct {
 		val uint64
 		exp []uint64
 	}{
-		{0, []uint64{1, 0, 0, 0, 0}},
-		{0, []uint64{2, 0, 0, 0, 0}},
-		{0, []uint64{3, 0, 0, 0, 0}},
+		{0, []uint64{1, 0, 0, 0, 0, 0, 0}},
+		{0, []uint64{2, 0, 0, 0, 0, 0, 0}},
+		{0, []uint64{3, 0, 0, 0, 0, 0, 0}},
 
-		{2, []uint64{4, 0, 0, 0, 0}},
-		{3, []uint64{5, 0, 0, 0, 0}},
-		{4, []uint64{6, 0, 0, 0, 0}},
+		{2, []uint64{4, 0, 0, 0, 0, 0, 0}},
+		{3, []uint64{5, 0, 0, 0, 0, 0, 0}},
+		{4, []uint64{6, 0, 0, 0, 0, 0, 0}},
 
-		{10, []uint64{6, 1, 0, 0, 0}},
-		{11, []uint64{6, 2, 0, 0, 0}},
-		{12, []uint64{6, 3, 0, 0, 0}},
+		{10, []uint64{6, 1, 0, 0, 0, 0, 0}},
+		{11, []uint64{6, 2, 0, 0, 0, 0, 0}},
+		{12, []uint64{6, 3, 0, 0, 0, 0, 0}},
 
-		{100, []uint64{6, 3, 0, 0, 1}},
-		{90, []uint64{6, 3, 0, 0, 2}},
-		{80, []uint64{6, 3, 0, 0, 3}},
+		{100, []uint64{6, 3, 0, 0, 1, 0, 0}},
+		{90, []uint64{6, 3, 0, 0, 2, 0, 0}},
+		{80, []uint64{6, 3, 0, 0, 3, 0, 0}},
 
-		{20, []uint64{6, 3, 1, 0, 3}},
-		{30, []uint64{6, 3, 2, 0, 3}},
-		{40, []uint64{6, 3, 2, 1, 3}},
+		{20, []uint64{6, 3, 1, 0, 3, 0, 0}},
+		{30, []uint64{6, 3, 2, 0, 3, 0, 0}},
+		{40, []uint64{6, 3, 2, 1, 3, 0, 0}},
 	}
 
 	for testi, test := range tests {
 		gh.Add(test.val, 1)
 
-		for i := 0; i < len(gh.Counts); i++ {
-			if gh.Counts[i] != test.exp[i] {
+		for i := 0; i < len(gh._bins); i++ {
+			if gh._bins[i]._count != test.exp[i] {
 				t.Errorf("test #%d, actual (%v) != exp (%v)",
-					testi, gh.Counts, test.exp)
+					testi, gh._bins[i]._count, test.exp)
 			}
 		}
 
-		if gh.TotCount != uint64(testi+1) {
+		if gh.Total() != uint64(testi+1) {
 			t.Errorf("TotCounts wrong")
 		}
 	}
 }
 
 func TestAddAll(t *testing.T) {
-	// Bins will look like: {0, 10, 20, 40, 80}.
+	// Bins will look like: {0-10, 10-20, 20-40, 40-80, 80-160, 160-320, 320-inf}
 	gh := NewHistogram(5, 10, 2.0)
 
 	gh.Add(15, 2)
@@ -152,40 +101,45 @@ func TestAddAll(t *testing.T) {
 	gh2.AddAll(gh)
 	gh2.AddAll(gh)
 
-	exp := []uint64{0, 4, 6, 0, 2}
+	exp := []uint64{0, 4, 6, 0, 0, 0, 2}
 
-	for i := 0; i < len(gh2.Counts); i++ {
-		if gh2.Counts[i] != exp[i] {
+	for i := 0; i < len(gh2._bins); i++ {
+		if gh2._bins[i]._count != exp[i] {
 			t.Errorf("AddAll mismatch, actual (%v) != exp (%v)",
-				gh2.Counts, exp)
+				gh2._bins[i]._count, exp)
 		}
 	}
 
-	if gh2.TotCount != 12 {
+	if gh2.Total() != 12 {
 		t.Errorf("TotCount wrong")
 	}
 }
 
 func TestGraph(t *testing.T) {
-	// Bins will look like: {0, 10, 20, 40, 80, 160, 320}.
-	gh := NewHistogram(7, 10, 2.0)
+	// Bins will look like: {[0 - 10], [10 - 20], [20 - 40], [40 - 80], [80 - 160],
+	//                       [160 - 320], [320 - 640], [640 - 1280], [1280 - inf]
+	gh := NewNamedHistogram("TestGraph", 7, 10, 2.0)
 
+	gh.Add(5, 2)
 	gh.Add(10, 20)
 	gh.Add(20, 10)
 	gh.Add(40, 3)
 	gh.Add(160, 2)
 	gh.Add(320, 1)
+	gh.Add(1280, 10)
 
 	buf := gh.EmitGraph([]byte("- "), nil)
 
-	exp := `-   0+ 10= 0   0.00%
--  10+ 10=20  55.56% ******************************
--  20+ 20=10  83.33% ***************
--  40+ 40= 3  91.67% ****
--  80+ 80= 0  91.67%
-- 160+160= 2  97.22% ***
-- 320+  0= 1 100.00% *
+	exp := `TestGraph (48 Total)
+- [0 - 10]        4.17%    4.17% ### (2)
+- [10 - 20]      41.67%   45.83% ############################## (20)
+- [20 - 40]      20.83%   66.67% ############### (10)
+- [40 - 80]       6.25%   72.92% #### (3)
+- [160 - 320]     4.17%   77.08% ### (2)
+- [320 - 640]     2.08%   79.17% # (1)
+- [1280 - inf]   20.83%  100.00% ############### (10)
 `
+
 	got := buf.String()
 	if got != exp {
 		t.Errorf("didn't get expected graph,\ngot: %s\nexp: %s",
