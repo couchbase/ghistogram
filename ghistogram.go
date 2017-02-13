@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"strconv"
 	"sync"
 )
 
@@ -35,6 +34,9 @@ import (
 //
 // The histogram is concurrent safe.
 type Histogram struct {
+	// Histogram name
+	Name string
+
 	// Ranges holds the lower domain bounds of bins, so bin i has data
 	// point domain of "[Ranges[i], Ranges[i+1])".  Related,
 	// Ranges[0] == 0 and Ranges[1] == binFirst.
@@ -63,7 +65,17 @@ func NewHistogram(
 	numBins int,
 	binFirst uint64,
 	binGrowthFactor float64) *Histogram {
+
+	return NewNamedHistogram("Histogram", numBins, binFirst, binGrowthFactor)
+}
+
+func NewNamedHistogram(
+	name string,
+	numBins int,
+	binFirst uint64,
+	binGrowthFactor float64) *Histogram {
 	gh := &Histogram{
+		Name:         name,
 		Ranges:       make([]uint64, numBins),
 		Counts:       make([]uint64, numBins),
 		TotCount:     0,
@@ -160,7 +172,6 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 	gh.m.Lock()
 
 	ranges := gh.Ranges
-	rangesN := len(ranges)
 	counts := gh.Counts
 	countsN := len(counts)
 
@@ -169,46 +180,60 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 	}
 
 	var maxCount uint64
-	for _, c := range counts {
+	var bins []string
+	var longestRange int
+
+	for i, c := range counts {
 		if maxCount < c {
 			maxCount = c
 		}
+
+		var temp string
+		if i < countsN-1 {
+			temp = fmt.Sprintf("%v - %v", ranges[i], ranges[i+1])
+		} else {
+			temp = fmt.Sprintf("%v - inf", ranges[i])
+		}
+
+		bins = append(bins, temp)
+		if c > 0 && longestRange < len(temp) {
+			longestRange = len(temp)
+		}
 	}
+
 	maxCountF := float64(maxCount)
 	totCountF := float64(gh.TotCount)
-
-	widthRange := len(strconv.Itoa(int(ranges[rangesN-1])))
-	widthWidth := len(strconv.Itoa(int(ranges[rangesN-1] - ranges[rangesN-2])))
-	widthCount := len(strconv.Itoa(int(maxCount)))
-
-	// Each line looks like: "[prefix]START+WIDTH=COUNT PCT% BAR\n"
-	f := fmt.Sprintf("%%%dd+%%%dd=%%%dd%% 7.2f%%%%",
-		widthRange, widthWidth, widthCount)
 
 	var runCount uint64 // Running total while emitting lines.
 
 	barLen := float64(len(bar))
 
+	fmt.Fprintf(out, "%s (%v Total)\n", gh.Name, gh.TotCount)
 	for i, c := range counts {
+		if c == 0 {
+			continue
+		}
+
+		var padding string
+		for j := 0; j < (longestRange - len(bins[i])); j++ {
+			padding = padding + " "
+		}
+
 		if prefix != nil {
 			out.Write(prefix)
 		}
 
-		var width uint64
-		if i < countsN-1 {
-			width = uint64(ranges[i+1] - ranges[i])
-		}
-
 		runCount += c
-		fmt.Fprintf(out, f, ranges[i], width, c,
+		fmt.Fprintf(out, "[%s] %s%7.2f%% %7.2f%%",
+			bins[i], padding,
+			100.0*(float64(c)/totCountF),
 			100.0*(float64(runCount)/totCountF))
 
-		if c > 0 {
-			out.Write([]byte(" "))
-			barWant := int(math.Floor(barLen * (float64(c) / maxCountF)))
-			out.Write(bar[0:barWant])
-		}
+		out.Write([]byte(" "))
+		barWant := int(math.Floor(barLen * (float64(c) / maxCountF)))
+		out.Write(bar[0:barWant])
 
+		out.Write([]byte(fmt.Sprintf(" (%v)", c)))
 		out.Write([]byte("\n"))
 	}
 
@@ -217,7 +242,7 @@ func (gh *Histogram) EmitGraph(prefix []byte,
 	return out
 }
 
-var bar = []byte("******************************")
+var bar = []byte("##############################")
 
 // CallSync invokes the callback func while the histogram is locked.
 func (gh *Histogram) CallSync(f func()) {
