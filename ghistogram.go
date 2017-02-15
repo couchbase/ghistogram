@@ -165,9 +165,11 @@ func (gh *Histogram) AddAll(src *Histogram) {
 // line emitted may have an optional prefix.
 //
 // For example:
-//       0+  10=2 10.00% ********
-//      10+  10=1 10.00% ****
-//      20+  10=3 10.00% ************
+//    TestGraph (48 Total)
+//    [0 - 10]        4.17%    4.17% ### (2)
+//    [10 - 20]      41.67%   45.83% ############################## (20)
+//    [20 - 40]      20.83%   66.67% ############### (10)
+//    [40 - inf]     33.33%  100.00% ####################### (16)
 func (gh *Histogram) EmitGraph(prefix []byte,
 	out *bytes.Buffer) *bytes.Buffer {
 	gh.m.Lock()
