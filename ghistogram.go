@@ -1,8 +1,11 @@
-//  Copyright (c) 2015 Couchbase, Inc.
+//  Copyright (c) 2017 Couchbase, Inc.
+//
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the
 //  License. You may obtain a copy of the License at
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
+//
 //  Unless required by applicable law or agreed to in writing,
 //  software distributed under the License is distributed on an "AS
 //  IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
@@ -11,6 +14,7 @@
 
 // Package ghistogram provides a simple histogram of uint64's that
 // avoids heap allocations (garbage creation) during data processing.
+
 package ghistogram
 
 import (
@@ -56,20 +60,20 @@ type Histogram struct {
 	m sync.Mutex
 }
 
-// NewHistogram creates a new, ready to use Histogram.  The numBins
-// must be >= 2.  The binFirst is the width of the first bin.  The
-// binGrowthFactor must be > 1.0 or 0.0.
-//
-// A special case of binGrowthFactor of 0.0 means the the allocated
-// bins will have constant, non-growing size or "width".
+// Creates a new Histogram whose name is "histogram"
 func NewHistogram(
 	numBins int,
 	binFirst uint64,
 	binGrowthFactor float64) *Histogram {
-
 	return NewNamedHistogram("histogram", numBins, binFirst, binGrowthFactor)
 }
 
+// NewNamedHistogram creates a new, ready to use Histogram. The numBins
+// must be >= 2.  The binFirst is the width of the first bin. The
+// binGrowthFactor must be > 1.0 or 0.0.
+//
+// A special case of binGrowthFactor of 0.0 means the the allocated
+// bins will have constant, non-growing size or "width".
 func NewNamedHistogram(
 	name string,
 	numBins int,
@@ -97,6 +101,25 @@ func NewNamedHistogram(
 	}
 
 	return gh
+}
+
+// Creates a new Histogram whose name and ranges are identical to
+// the one provided. Note that the entries are not copied.
+func (gh *Histogram) CloneEmpty() *Histogram {
+	newHist := &Histogram{
+		Name:         gh.Name,
+		Ranges:       make([]uint64, len(gh.Ranges)),
+		Counts:       make([]uint64, len(gh.Counts)),
+		TotCount:     0,
+		MinDataPoint: math.MaxUint64,
+		MaxDataPoint: 0,
+	}
+
+	for i := 0; i < len(gh.Ranges); i++ {
+		newHist.Ranges[i] = gh.Ranges[i]
+	}
+
+	return newHist
 }
 
 // Add increases the count in the bin for the given dataPoint.
@@ -160,8 +183,8 @@ func (gh *Histogram) AddAll(src *Histogram) {
 	src.m.Unlock()
 }
 
-// Graph emits an ascii graph to the optional out buffer, allocating a
-// out buffer if none was supplied.  Returns the out buffer.  Each
+// EmitGraph emits an ascii graph to the optional out buffer, allocating
+// an out buffer if none was supplied. Returns the out buffer. Each
 // line emitted may have an optional prefix.
 //
 // For example:
