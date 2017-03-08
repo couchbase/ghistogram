@@ -122,10 +122,15 @@ func (gh *Histogram) CloneEmpty() *Histogram {
 	return newHist
 }
 
-// Add increases the count in the bin for the given dataPoint.
+// Add increases the count in the bin for the given dataPoint
+// in a concurrent-safe manner.
 func (gh *Histogram) Add(dataPoint uint64, count uint64) {
 	gh.m.Lock()
+	gh.addUNLOCKED(dataPoint, count)
+	gh.m.Unlock()
+}
 
+func (gh *Histogram) addUNLOCKED(dataPoint uint64, count uint64) {
 	idx := search(gh.Ranges, dataPoint)
 	if idx >= 0 {
 		gh.Counts[idx] += count
@@ -139,8 +144,6 @@ func (gh *Histogram) Add(dataPoint uint64, count uint64) {
 			gh.MaxDataPoint = dataPoint
 		}
 	}
-
-	gh.m.Unlock()
 }
 
 // Finds the last arr index where the arr entry <= dataPoint.
@@ -271,5 +274,15 @@ var bar = []byte("##############################")
 func (gh *Histogram) CallSync(f func()) {
 	gh.m.Lock()
 	f()
+	gh.m.Unlock()
+}
+
+// CallSyncEx invokes the callback func with a HistogramMutator
+// while the histogram is locked.  This allows apps to perform
+// multiple updates to a histogram without incurring locking
+// costs on each update.
+func (gh *Histogram) CallSyncEx(f func(HistogramMutator)) {
+	gh.m.Lock()
+	f(&histogramMutator{gh})
 	gh.m.Unlock()
 }
