@@ -1,7 +1,11 @@
 language: go
 
+arch:
+    - AMD64
+    - ppc64le
+
 go:
-  - 1.4
+  - 1.15
 
 before_install:
   - go get github.com/axw/gocov/gocov
